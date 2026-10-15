@@ -1,0 +1,92 @@
+# Trovana - WAHA (motor GOWS) no Coolify.
+#
+# No Coolify: New Resource > Docker Compose (Empty) > cole este arquivo.
+# Domínio do serviço "waha": https://waha.trovana.com.br:3000
+# O Coolify (Traefik) cuida do HTTPS; nenhuma porta é publicada no servidor.
+# As variáveis vêm da aba Environment Variables do Coolify (ver coolify.env).
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+services:
+  waha:
+    # Versão fixa. Para atualizar, troque WAHA_IMAGE e teste antes.
+    image: ${WAHA_IMAGE:-devlikeapro/waha:gows-2026.9.2}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    expose:
+      - "3000"
+
+    environment:
+      # Chave da API (obrigatória). A mesma vai em WAHA_API_KEY no backend.
+      WAHA_API_KEY: ${WAHA_API_KEY:?}
+
+      # Motor
+      WHATSAPP_DEFAULT_ENGINE: GOWS
+      WHATSAPP_RESTART_ALL_SESSIONS: "True"
+      WAHA_AUTO_START_DELAY_SECONDS: ${WAHA_AUTO_START_DELAY_SECONDS:-5}
+      WAHA_PRINT_QR: "False"
+
+      # Painel e documentação desligados em produção.
+      WAHA_DASHBOARD_ENABLED: ${WAHA_DASHBOARD_ENABLED:-False}
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME:-}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:-}
+      WHATSAPP_SWAGGER_ENABLED: ${WHATSAPP_SWAGGER_ENABLED:-False}
+      WHATSAPP_SWAGGER_USERNAME: ${WHATSAPP_SWAGGER_USERNAME:-}
+      WHATSAPP_SWAGGER_PASSWORD: ${WHATSAPP_SWAGGER_PASSWORD:-}
+
+      # A Trovana só envia e ouve session.status: não baixa mídia recebida e
+      # ignora status, canais e listas de transmissão. Grupos NÃO são ignorados.
+      WHATSAPP_DOWNLOAD_MEDIA: "False"
+      WAHA_SESSION_CONFIG_IGNORE_STATUS: "True"
+      WAHA_SESSION_CONFIG_IGNORE_CHANNELS: "True"
+      WAHA_SESSION_CONFIG_IGNORE_BROADCAST: "True"
+
+      WAHA_BASE_URL: ${WAHA_BASE_URL:-}
+
+      # Logs
+      WAHA_LOG_FORMAT: JSON
+      WAHA_LOG_LEVEL: ${WAHA_LOG_LEVEL:-info}
+      WAHA_HTTP_LOG_LEVEL: ${WAHA_HTTP_LOG_LEVEL:-warn}
+      TZ: America/Sao_Paulo
+
+    volumes:
+      # Login de cada número. Se perder, todo mundo precisa reconectar.
+      - waha-sessions:/app/.sessions
+
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+
+    security_opt:
+      - no-new-privileges:true
+
+    deploy:
+      resources:
+        limits:
+          memory: ${WAHA_MEMORY_LIMIT:-3g}
+
+    healthcheck:
+      # A imagem gows não tem wget/curl; o node já está lá.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+    logging: *logging
+
+volumes:
+  waha-sessions:

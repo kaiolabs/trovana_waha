@@ -1,0 +1,22 @@
+# HTTPS na frente do WAHA. Certificado automático (Let's Encrypt).
+# Só os IPs de WAHA_ALLOWED_IPS (o servidor do backend) chegam ao WAHA;
+# o resto recebe 403. A chave da API continua obrigatória.
+{$WAHA_DOMAIN} {
+	@permitido remote_ip {$WAHA_ALLOWED_IPS}
+
+	handle @permitido {
+		request_body {
+			max_size 20MB
+		}
+		reverse_proxy waha:3000
+	}
+
+	handle {
+		respond "Forbidden" 403
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
